@@ -3,7 +3,7 @@ services:
     name: revbusters-api
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn api:app
+    startCommand: gunicorn api:app --timeout 120
     envVars:
       - key: APIFY_API_TOKEN
         sync: false   # Set this manually in Render dashboard → Environment
