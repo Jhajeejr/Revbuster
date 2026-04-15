@@ -162,9 +162,9 @@
       box-shadow: 0 4px 24px rgba(0,0,0,0.10);
     }
     .card-header { padding: 20px 24px 18px; color: #fff; }
-    .card-header.genuine    { background: #34C759; }
-    .card-header.suspicious { background: #FF9500; }
-    .card-header.fake       { background: #FF3B30; }
+    .card-header.genuine          { background: #34C759; }
+    .card-header.suspicious       { background: #FF9500; }
+    .card-header.highly-suspicious{ background: #FF3B30; }
 
     .trust-badge {
       display: inline-flex; align-items: center; gap: 6px;
@@ -193,6 +193,8 @@
     .rating-count { font-size: 11px; color: #8e8e93; margin-top: 4px; }
     .rating-item.ai .rating-value { color: #FF3B30; }
     .rating-item.ai.ok .rating-value { color: #34C759; }
+    .ai-score-btn { border-bottom-color: #FF3B30; }
+    .rating-item.ai.ok .ai-score-btn { border-bottom-color: #34C759; }
 
     .reasons { padding: 20px 24px; border-bottom: 1px solid #f0f0f0; }
     .reasons-title {
@@ -484,7 +486,7 @@
       gtag('event', 'share_whatsapp', { business_name: businessName });
       const cardEl  = document.querySelector("#result .card");
       const siteURL = "https://jhajeejr.github.io/Revbuster/";
-      const text    = `Check this fake review analysis for ${businessName}: You can check for other places at - ${siteURL}`;
+      const text    = `I checked the reviews for ${businessName} on RevBusters — see if they're genuine or suspicious. Check any place here: ${siteURL}`;
 
       try {
         const canvas = await html2canvas(cardEl, { scale: 2, useCORS: true });
@@ -506,6 +508,7 @@
     function renderCard(r) {
       const location = shortLocation(r.meta.address);
       const aiCls    = r.trust_level === "genuine" ? "rating-item ai ok" : "rating-item ai";
+      const safeName = (r.meta.business_name || "").replace(/'/g, "\\'");
 
       let middleSection = "";
       if (r.trust_level === "genuine") {
@@ -546,7 +549,7 @@
           <div class="${aiCls}" onclick="document.getElementById('aiModal').classList.add('visible')" style="cursor:pointer;">
             <div class="rating-label">AI Score</div>
             <div class="rating-value"><span class="star">★</span> <span class="ai-score-btn">${r.ai_rating}</span></div>
-            <div class="rating-count">${r.fake_pct}% fake · ${r.genuine_pct}% genuine</div>
+            <div class="rating-count">${r.suspicious_pct}% suspicious · ${r.genuine_pct}% genuine</div>
             <div class="ai-score-hint">Tap to learn how ↗</div>
           </div>
         </div>
@@ -557,7 +560,7 @@
         </div>
         <div class="card-footer">
           <div class="brand"><span>Rev</span>Busters</div>
-          <button class="whatsapp-btn" onclick="shareOnWhatsApp('${r.meta.business_name.replace(/'/g, "\\'")}')">
+          <button class="whatsapp-btn" onclick="shareOnWhatsApp('${safeName}')">
             ${wasvgIcon()} Share on WhatsApp
           </button>
         </div>
