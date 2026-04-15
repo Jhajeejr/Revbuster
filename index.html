@@ -261,6 +261,60 @@
       font-size: 11px;
       color: #aeaeb2;
     }
+
+    /* ── AI Score clickable hint ── */
+    .ai-score-btn {
+      cursor: pointer;
+      border-bottom: 1.5px dashed #FF3B30;
+      display: inline-block;
+      line-height: 1;
+    }
+    .rating-item.ai.ok .ai-score-btn { border-bottom-color: #34C759; }
+    .ai-score-hint {
+      font-size: 10px; color: #aeaeb2; margin-top: 5px;
+      letter-spacing: 0.2px;
+    }
+
+    /* ── Modal overlay ── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.visible { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 20px 20px 0 0;
+      padding: 28px 24px 36px;
+      max-width: 480px;
+      width: 100%;
+      animation: slideUp 0.25s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(40px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .modal-title {
+      font-size: 17px; font-weight: 800; color: #1c1c1e;
+      margin-bottom: 20px;
+    }
+    .modal-item {
+      display: flex; gap: 14px; margin-bottom: 20px; align-items: flex-start;
+    }
+    .modal-item:last-of-type { margin-bottom: 24px; }
+    .modal-emoji { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+    .modal-text h3 { font-size: 14px; font-weight: 700; color: #1c1c1e; margin-bottom: 4px; }
+    .modal-text p  { font-size: 13.5px; color: #3a3a3c; line-height: 1.6; }
+    .modal-close {
+      width: 100%; padding: 13px;
+      background: #f0f2f5; border: none; border-radius: 12px;
+      font-size: 14px; font-weight: 700; color: #1c1c1e;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .modal-close:hover { background: #e5e7ea; }
   </style>
 </head>
 <body>
@@ -328,10 +382,50 @@
     Results are algorithmic estimates only — not a definitive verdict. &nbsp;·&nbsp; <span style="color:#FF3B30;font-weight:700;">Rev</span>Busters
   </footer>
 
+  <!-- AI Score explanation modal -->
+  <div class="modal-overlay" id="aiModal" onclick="closeAiModal(event)">
+    <div class="modal">
+      <div class="modal-title">How is the AI Score calculated?</div>
+
+      <div class="modal-item">
+        <div class="modal-emoji">🔍</div>
+        <div class="modal-text">
+          <h3>We read the reviews so you don't have to</h3>
+          <p>We fetch up to 100 recent reviews from Google and send them to an AI — the same kind that powers ChatGPT and Gemini.</p>
+        </div>
+      </div>
+
+      <div class="modal-item">
+        <div class="modal-emoji">🤖</div>
+        <div class="modal-text">
+          <h3>AI spots the fakes</h3>
+          <p>The AI reads every review and asks: does this sound like a real person, or does it sound scripted, copy-pasted, or paid for? It looks for patterns — like 20 reviews all saying "best salon in Gurgaon, must visit!", or reviews that unnaturally use the full business name or staff names. Real people don't write like that. Any sudden spike in reviews during a particular time period is also flagged.</p>
+        </div>
+      </div>
+
+      <div class="modal-item">
+        <div class="modal-emoji">⭐</div>
+        <div class="modal-text">
+          <h3>It gives a fair score</h3>
+          <p>After ignoring the fake reviews, the AI estimates what rating the place actually deserves, based only on reviews it believes are real.</p>
+        </div>
+      </div>
+
+      <button class="modal-close" onclick="document.getElementById('aiModal').classList.remove('visible')">Got it</button>
+    </div>
+  </div>
+
   <script>
     // ── Config ──────────────────────────────────────────────────────────
     // IMPORTANT: replace this with your actual Render URL after deployment
     const API_BASE = "https://revbuster.onrender.com";
+
+    // ── AI Score modal ───────────────────────────────────────────────────
+    function closeAiModal(e) {
+      if (e.target === document.getElementById('aiModal')) {
+        document.getElementById('aiModal').classList.remove('visible');
+      }
+    }
 
     // ── Warmup ping on page load ─────────────────────────────────────────
     window.addEventListener("load", () => {
@@ -351,10 +445,9 @@
     // ── Loading messages ──────────────────────────────────────────────────
     const loadingMessages = [
       "Fetching reviews from Google…",
-      "Scanning for ghost accounts…",
-      "Detecting velocity spikes…",
-      "Checking for copy-paste patterns…",
-      "Calculating trust score…",
+      "Sending reviews to AI for analysis…",
+      "Detecting fake patterns and coordination…",
+      "Estimating true rating…",
       "Almost there…",
     ];
     let msgInterval = null;
@@ -449,12 +542,12 @@
           <div class="rating-item">
             <div class="rating-label">Google Rating</div>
             <div class="rating-value"><span class="star">★</span> ${r.google_rating}</div>
-            <div class="rating-count">${r.total_google.toLocaleString()} reviews</div>
           </div>
-          <div class="${aiCls}">
-            <div class="rating-label">AI Predicted</div>
-            <div class="rating-value"><span class="star">★</span> ${r.ai_rating}</div>
-            <div class="rating-count">~${r.estimated_genuine.toLocaleString()} genuine reviews</div>
+          <div class="${aiCls}" onclick="document.getElementById('aiModal').classList.add('visible')" style="cursor:pointer;">
+            <div class="rating-label">AI Score</div>
+            <div class="rating-value"><span class="star">★</span> <span class="ai-score-btn">${r.ai_rating}</span></div>
+            <div class="rating-count">${r.fake_pct}% fake · ${r.genuine_pct}% genuine</div>
+            <div class="ai-score-hint">Tap to learn how ↗</div>
           </div>
         </div>
         ${middleSection}

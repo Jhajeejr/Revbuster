@@ -63,7 +63,9 @@ def analyze_url():
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        import sys
+        print(f"[ERROR] {type(e).__name__}: {e}", file=sys.stderr)
+        return jsonify({"error": f"{type(e).__name__}: {str(e)}"}), 500
 
 
 def _sanitize(obj):

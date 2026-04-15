@@ -6,4 +6,6 @@ services:
     startCommand: gunicorn api:app --timeout 120
     envVars:
       - key: APIFY_API_TOKEN
-        sync: false   # Set this manually in Render dashboard → Environment
+        sync: false   # Set manually in Render dashboard → Environment
+      - key: ANTHROPIC_API_KEY
+        sync: false   # Set manually in Render dashboard → Environment
