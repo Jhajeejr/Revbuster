@@ -27,9 +27,15 @@ def resolve_url(url: str) -> dict:
     r = requests.get(url, headers=headers, allow_redirects=True, timeout=10)
     final_url = r.url
 
-    # Extract kgmid from search redirect (share.google resolves to this)
+    # Extract kgmid — two formats:
+    # 1. ?kgmid=/g/xxx  (share.google redirects)
+    # 2. /16s%2Fg%2Fxxx  (standard place URLs)
     kgmid_match = re.search(r'kgmid=(/g/[a-zA-Z0-9_]+)', final_url)
-    kgmid = kgmid_match.group(1) if kgmid_match else None
+    if not kgmid_match:
+        kgmid_match = re.search(r'16s%2Fg%2F([a-zA-Z0-9_]+)', final_url)
+        kgmid = f"/g/{kgmid_match.group(1)}" if kgmid_match else None
+    else:
+        kgmid = kgmid_match.group(1)
 
     # Extract place name from query param
     name_match = re.search(r'[?&]q=([^&]+)', final_url)
@@ -94,14 +100,21 @@ def scrape_reviews(google_maps_url: str, max_reviews: int = None) -> dict:
 
     print(f"Place: {place_name} | kgmid: {kgmid}")
 
-    # Build search URL for Apify
-    search_url = f"https://www.google.com/maps/search/{place_name}" if place_name else google_maps_url
+    # Choose the best URL for Apify:
+    # - If resolved to a direct place URL (/maps/place/) → use it (specific, no ambiguity)
+    # - Otherwise (share.google → google.com/search?kgmid=...) → use original short URL
+    #   so Apify can resolve it internally
+    final_url = resolved["resolved_url"]
+    if "/maps/place/" in final_url:
+        apify_url = final_url
+    else:
+        apify_url = google_maps_url
 
     # Single scrape — start with 200, dynamic limit applied after using reviewsCount from results
     first_pass = max_reviews or 200
-    print(f"Scraping up to {first_pass} reviews...")
+    print(f"Scraping up to {first_pass} reviews from: {apify_url}")
     run = client.actor("compass/google-maps-reviews-scraper").call(run_input={
-        "startUrls": [{"url": search_url}],
+        "startUrls": [{"url": apify_url}],
         "maxReviews": first_pass,
         "reviewsSort": "newest",
     })
@@ -114,7 +127,15 @@ def scrape_reviews(google_maps_url: str, max_reviews: int = None) -> dict:
         print(f"Filtered {len(all_reviews)} → {len(filtered)} reviews for kgmid {kgmid}")
         reviews = filtered if filtered else all_reviews
     else:
-        reviews = all_reviews
+        # No kgmid — group by title and take the most-reviewed business
+        from collections import Counter
+        title_counts = Counter(r.get("title") for r in all_reviews)
+        if len(title_counts) > 1:
+            top_title = title_counts.most_common(1)[0][0]
+            reviews = [r for r in all_reviews if r.get("title") == top_title]
+            print(f"Multiple businesses found — using most common: '{top_title}' ({len(reviews)} reviews)")
+        else:
+            reviews = all_reviews
 
 
     # Extract business metadata from first review

@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RevBusters – Are Those Reviews Real?</title>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6L39EXDB0Z"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-6L39EXDB0Z');
+  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -380,6 +388,7 @@
 
     // ── WhatsApp share with card image ────────────────────────────────────
     async function shareOnWhatsApp(businessName) {
+      gtag('event', 'share_whatsapp', { business_name: businessName });
       const cardEl  = document.querySelector("#result .card");
       const siteURL = "https://jhajeejr.github.io/Revbuster/";
       const text    = `Check this fake review analysis for ${businessName}: You can check for other places at - ${siteURL}`;
