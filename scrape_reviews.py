@@ -111,7 +111,7 @@ def scrape_reviews(google_maps_url: str, max_reviews: int = None) -> dict:
         apify_url = google_maps_url
 
     # Single scrape — start with 200, dynamic limit applied after using reviewsCount from results
-    first_pass = max_reviews or 200
+    first_pass = max_reviews or 100
     print(f"Scraping up to {first_pass} reviews from: {apify_url}")
     run = client.actor("compass/google-maps-reviews-scraper").call(run_input={
         "startUrls": [{"url": apify_url}],
