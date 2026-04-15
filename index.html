@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RevBusters – Are Those Reviews Real?</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -202,6 +203,15 @@
     .reason-text { font-size: 13.5px; color: #3a3a3c; line-height: 1.5; }
     .reason-text strong { color: #1c1c1e; }
 
+    .genuine-msg {
+      padding: 20px 24px;
+      font-size: 14px;
+      color: #1c6e2e;
+      background: #f0faf3;
+      border-bottom: 1px solid #f0f0f0;
+      line-height: 1.5;
+    }
+
     .disclaimer {
       padding: 14px 24px; font-size: 11px; color: #aeaeb2;
       line-height: 1.5; border-bottom: 1px solid #f0f0f0;
@@ -313,7 +323,7 @@
   <script>
     // ── Config ──────────────────────────────────────────────────────────
     // IMPORTANT: replace this with your actual Render URL after deployment
-    const API_BASE = "https://revbuster.onrender.com";
+    const API_BASE = "https://revbusters-api.onrender.com";
 
     // ── Warmup ping on page load ─────────────────────────────────────────
     window.addEventListener("load", () => {
@@ -368,29 +378,55 @@
       </svg>`;
     }
 
+    // ── WhatsApp share with card image ────────────────────────────────────
+    async function shareOnWhatsApp(businessName) {
+      const cardEl  = document.querySelector("#result .card");
+      const siteURL = "https://jhajeejr.github.io/Revbuster/";
+      const text    = `Check this fake review analysis for ${businessName}: You can check for other places at - ${siteURL}`;
+
+      try {
+        const canvas = await html2canvas(cardEl, { scale: 2, useCORS: true });
+        canvas.toBlob(async (blob) => {
+          const file = new File([blob], "revbusters-analysis.png", { type: "image/png" });
+          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], text });
+          } else {
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+          }
+        }, "image/png");
+      } catch (e) {
+        // Fallback if html2canvas fails
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+      }
+    }
+
     // ── Card renderer ─────────────────────────────────────────────────────
     function renderCard(r) {
-      const location   = shortLocation(r.meta.address);
-      const aiCls      = r.trust_level === "genuine" ? "rating-item ai ok" : "rating-item ai";
-      const fakePct    = Math.max(0, Math.round((1 - r.estimated_genuine / r.total_google) * 100));
-      const waText     = `Check this fake review analysis for ${r.meta.business_name}: Google says ${r.google_rating}★ but AI predicts ${r.ai_rating}★ with ${fakePct}% suspicious reviews. revbusters.in`;
-      const waURL      = `https://wa.me/?text=${encodeURIComponent(waText)}`;
+      const location = shortLocation(r.meta.address);
+      const aiCls    = r.trust_level === "genuine" ? "rating-item ai ok" : "rating-item ai";
 
-      let signalsHTML = "";
-      if (r.signals && r.signals.length > 0) {
-        for (const s of r.signals) {
-          signalsHTML += `
-          <div class="reason-item">
-            <div class="reason-icon">${s.icon}</div>
-            <div class="reason-text"><strong>${s.title}</strong> — ${s.detail}</div>
-          </div>`;
-        }
+      let middleSection = "";
+      if (r.trust_level === "genuine") {
+        middleSection = `
+        <div class="genuine-msg">
+          ✅ &nbsp;This place appears to have genuine reviews. No significant patterns of manipulation were detected.
+        </div>`;
       } else {
-        signalsHTML = `
-          <div class="reason-item">
-            <div class="reason-icon">✅</div>
-            <div class="reason-text"><strong>No major signals detected</strong> — review patterns appear consistent with genuine activity.</div>
-          </div>`;
+        let signalsHTML = "";
+        if (r.signals && r.signals.length > 0) {
+          for (const s of r.signals) {
+            signalsHTML += `
+            <div class="reason-item">
+              <div class="reason-icon">${s.icon}</div>
+              <div class="reason-text"><strong>${s.title}</strong> — ${s.detail}</div>
+            </div>`;
+          }
+        }
+        middleSection = `
+        <div class="reasons">
+          <div class="reasons-title">Signals detected</div>
+          ${signalsHTML}
+        </div>`;
       }
 
       return `
@@ -412,19 +448,16 @@
             <div class="rating-count">~${r.estimated_genuine.toLocaleString()} genuine reviews</div>
           </div>
         </div>
-        <div class="reasons">
-          <div class="reasons-title">Signals detected</div>
-          ${signalsHTML}
-        </div>
+        ${middleSection}
         <div class="disclaimer">
           Algorithmic estimate only — indicates suspicious patterns, not a definitive conclusion.
           We recommend reading reviews directly before deciding.
         </div>
         <div class="card-footer">
           <div class="brand"><span>Rev</span>Busters</div>
-          <a class="whatsapp-btn" href="${waURL}" target="_blank">
+          <button class="whatsapp-btn" onclick="shareOnWhatsApp('${r.meta.business_name.replace(/'/g, "\\'")}')">
             ${wasvgIcon()} Share on WhatsApp
-          </a>
+          </button>
         </div>
       </div>`;
     }
