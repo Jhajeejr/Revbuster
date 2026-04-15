@@ -49,19 +49,24 @@ def resolve_url(url: str) -> dict:
 
 def _calculate_scrape_limit(total_reviews) -> int:
     """
-    Dynamic scrape limit:
-    - Lower bound: max(100, 10% of total)
-    - Upper bound: min(50% of total, 300)
-    - Always capped at total (don't ask for more than exists)
+    Scrape limit formula:
+    - If 50% of total > 200  → scrape 200
+    - If 50% of total < 100  → scrape min(total, 100)
+    - Otherwise              → scrape 50% of total
     """
     try:
-        total_reviews = int(total_reviews)
+        x = int(total_reviews)
     except (TypeError, ValueError):
-        return 200  # fallback if metadata unavailable
-    if total_reviews <= 0:
         return 200
-    limit = max(100, min(int(total_reviews * 0.5), 300))
-    return min(total_reviews, limit)
+    if x <= 0:
+        return 200
+    half = x * 0.5
+    if half > 200:
+        return 200
+    elif half < 100:
+        return min(x, 100)
+    else:
+        return int(half)
 
 
 def _run_apify(client, search_url: str, max_reviews: int) -> list:
@@ -69,7 +74,6 @@ def _run_apify(client, search_url: str, max_reviews: int) -> list:
         "startUrls": [{"url": search_url}],
         "maxReviews": max_reviews,
         "reviewsSort": "newest",
-        "language": "en",
     }
     run = client.actor("compass/google-maps-reviews-scraper").call(run_input=run_input)
     return list(client.dataset(run["defaultDatasetId"]).iterate_items())
@@ -108,7 +112,6 @@ def scrape_reviews(google_maps_url: str, max_reviews: int = None) -> dict:
         "startUrls": [{"url": search_url}],
         "maxReviews": max_reviews,
         "reviewsSort": "newest",
-        "language": "en",
     })
 
     all_reviews = list(client.dataset(run["defaultDatasetId"]).iterate_items())
