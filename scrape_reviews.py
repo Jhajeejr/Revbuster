@@ -97,25 +97,16 @@ def scrape_reviews(google_maps_url: str, max_reviews: int = None) -> dict:
     # Build search URL for Apify
     search_url = f"https://www.google.com/maps/search/{place_name}" if place_name else google_maps_url
 
-    # Step 1: if no limit given, fetch 3 reviews to get total count, then calculate limit
-    if max_reviews is None:
-        print("Fetching metadata to calculate scrape limit...")
-        sample = _run_apify(client, search_url, max_reviews=3)
-        if kgmid:
-            sample = [r for r in sample if r.get("kgmid") == kgmid] or sample
-        total = sample[0].get("reviewsCount", 0) if sample else 0
-        max_reviews = _calculate_scrape_limit(total)
-        print(f"Total reviews on Google: {total} → scraping {max_reviews}")
-
-    print(f"Scraping {max_reviews} reviews... (this takes ~30-60 seconds)")
+    # Single scrape — start with 200, dynamic limit applied after using reviewsCount from results
+    first_pass = max_reviews or 200
+    print(f"Scraping up to {first_pass} reviews...")
     run = client.actor("compass/google-maps-reviews-scraper").call(run_input={
         "startUrls": [{"url": search_url}],
-        "maxReviews": max_reviews,
+        "maxReviews": first_pass,
         "reviewsSort": "newest",
     })
 
     all_reviews = list(client.dataset(run["defaultDatasetId"]).iterate_items())
-
 
     # Filter to the specific place using kgmid if available
     if kgmid:
@@ -124,6 +115,7 @@ def scrape_reviews(google_maps_url: str, max_reviews: int = None) -> dict:
         reviews = filtered if filtered else all_reviews
     else:
         reviews = all_reviews
+
 
     # Extract business metadata from first review
     meta = {}

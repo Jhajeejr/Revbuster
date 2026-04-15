@@ -131,10 +131,37 @@ def _score_reviews(parsed, spike_weeks, tfidf_flagged):
         r["is_suspicious"] = sigs == 1
 
 
-def _trust_level(delta: float):
-    if delta <= TRUST_GENUINE_DELTA:
+def _trust_level(delta: float, ghost_pct: float, spike_count: int, duplicate_pct: float):
+    """
+    Combined suspicion score — rating delta alone is not enough
+    because fake reviews on 5-star businesses don't shift the average.
+    """
+    score = 0.0
+
+    # Rating delta (inflated rating signal)
+    score += delta * 2.0
+
+    # Ghost account concentration
+    if ghost_pct >= 0.40:
+        score += 1.5
+    elif ghost_pct >= 0.25:
+        score += 0.75
+
+    # Velocity spikes
+    if spike_count >= 3:
+        score += 1.0
+    elif spike_count >= 2:
+        score += 0.5
+
+    # Duplicate / copy-paste reviews
+    if duplicate_pct >= 0.30:
+        score += 1.0
+    elif duplicate_pct >= 0.15:
+        score += 0.5
+
+    if score < 1.0:
         return "genuine", "Likely Genuine"
-    elif delta <= TRUST_SUSPICIOUS_DELTA:
+    elif score < 2.5:
         return "suspicious", "Suspicious Activity"
     else:
         return "fake", "Likely Fake Reviews"
@@ -205,23 +232,32 @@ def analyze(reviews_data: dict) -> dict:
     ghost_pct  = ghost_n / n
     empty_pct  = empty_n / n
 
-    # --- AI predicted rating (average stars of non-fake reviews) ---
-    genuine_reviews = [r for r in parsed if not r["is_fake"]]
-    if genuine_reviews:
-        ai_rating = sum(r["stars"] for r in genuine_reviews) / len(genuine_reviews)
-    else:
-        ai_rating = meta.get("total_google_rating", 5.0)
+    # --- AI predicted rating ---
+    # Use actual sample star distribution (more precise than Google's rounded display).
+    # Remove estimated fake 5★ reviews from both numerator and denominator.
+    #   sample_avg   = actual average from scraped reviews
+    #   fake_stars   = 5 × estimated_fake_count  (fake reviews are almost always 5★)
+    #   ai_rating    = (sample_avg × total - fake_stars) / (total - fake_count)
+    total_google      = meta.get("total_google_reviews") or n
+    google_rating_raw = meta.get("total_google_rating") or 5.0
+    fake_rate         = fake_n / n if n > 0 else 0
+    est_fake_total    = fake_rate * total_google
+    est_genuine_total = max(1, total_google - est_fake_total)
 
-    ai_rating = round(ai_rating, 1)
+    # Use sample average as base (captures actual 1★/4★ reviews, not just rounded display)
+    sample_avg = sum(r["stars"] for r in parsed) / n if n > 0 else google_rating_raw
+    total_stars_est = sample_avg * total_google
+    fake_stars      = 5.0 * est_fake_total
+    ai_rating       = (total_stars_est - fake_stars) / est_genuine_total
+    ai_rating       = max(1.0, min(round(ai_rating, 1), google_rating_raw))
 
-    total_google = meta.get("total_google_reviews") or n
-    genuine_pct  = genuine_n / n
-    estimated_genuine = max(1, round(genuine_pct * total_google))
+    estimated_genuine = max(1, round(est_genuine_total))
 
     # --- trust level ---
     google_rating = meta.get("total_google_rating") or 5.0
     delta         = google_rating - ai_rating
-    trust_level, trust_label = _trust_level(delta)
+    duplicate_pct = len(tfidf_flagged) / n if n > 0 else 0
+    trust_level, trust_label = _trust_level(delta, ghost_pct, len(spike_weeks), duplicate_pct)
 
     # --- narrative signals ---
     signals = _build_signals(
