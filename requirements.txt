@@ -1,0 +1,8 @@
+flask
+flask-cors
+gunicorn
+apify-client
+python-dotenv
+scikit-learn
+numpy
+requests

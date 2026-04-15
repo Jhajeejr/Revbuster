@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RevBusters – Are Those Reviews Real?</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e5e5ea;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+    }
+    .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+    .logo span { color: #FF3B30; }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 52px 24px 36px;
+    }
+    .hero h1 {
+      font-size: 30px;
+      font-weight: 800;
+      color: #1c1c1e;
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+    .hero h1 em {
+      font-style: normal;
+      color: #FF3B30;
+    }
+    .hero p {
+      font-size: 15px;
+      color: #6e6e73;
+      max-width: 420px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── Input area ── */
+    .input-wrap {
+      max-width: 540px;
+      margin: 0 auto;
+      padding: 0 16px 40px;
+      width: 100%;
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+      background: #fff;
+      border-radius: 16px;
+      padding: 8px 8px 8px 16px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+    }
+    .input-row input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 14px;
+      color: #1c1c1e;
+      background: transparent;
+      min-width: 0;
+    }
+    .input-row input::placeholder { color: #aeaeb2; }
+    .btn-analyze {
+      background: #FF3B30;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 11px 20px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-analyze:hover { background: #e0352b; }
+    .btn-analyze:disabled { background: #ffb3af; cursor: not-allowed; }
+
+    .input-hint {
+      text-align: center;
+      font-size: 12px;
+      color: #aeaeb2;
+      margin-top: 10px;
+    }
+
+    /* ── Loading ── */
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px 24px;
+    }
+    .loading.visible { display: block; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #f0f0f0;
+      border-top-color: #FF3B30;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-msg {
+      font-size: 14px;
+      color: #6e6e73;
+      transition: opacity 0.4s;
+    }
+    .loading-sub {
+      font-size: 12px;
+      color: #aeaeb2;
+      margin-top: 6px;
+    }
+
+    /* ── Error ── */
+    .error-box {
+      display: none;
+      max-width: 540px;
+      margin: 0 auto 24px;
+      padding: 14px 18px;
+      background: #fff1f0;
+      border: 1px solid #ffccc7;
+      border-radius: 12px;
+      font-size: 14px;
+      color: #cf1322;
+      text-align: center;
+    }
+    .error-box.visible { display: block; }
+
+    /* ── Result card (mirrors card_preview.html) ── */
+    #result { display: none; }
+    #result.visible { display: flex; justify-content: center; padding: 0 16px 48px; }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      max-width: 400px;
+      width: 100%;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    }
+    .card-header { padding: 20px 24px 18px; color: #fff; }
+    .card-header.genuine    { background: #34C759; }
+    .card-header.suspicious { background: #FF9500; }
+    .card-header.fake       { background: #FF3B30; }
+
+    .trust-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.8px;
+      text-transform: uppercase; opacity: 0.92; margin-bottom: 8px;
+    }
+    .trust-badge .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: rgba(255,255,255,0.85);
+    }
+    .business-name { font-size: 22px; font-weight: 700; line-height: 1.2; }
+    .business-meta { font-size: 12px; opacity: 0.82; margin-top: 4px; }
+
+    .ratings {
+      display: flex; padding: 20px 24px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .rating-item { flex: 1; text-align: center; }
+    .rating-item + .rating-item { border-left: 1px solid #f0f0f0; }
+    .rating-label {
+      font-size: 11px; color: #8e8e93; font-weight: 600;
+      letter-spacing: 0.4px; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .rating-value { font-size: 28px; font-weight: 700; color: #1c1c1e; line-height: 1; }
+    .rating-value .star { color: #FF9500; font-size: 20px; }
+    .rating-count { font-size: 11px; color: #8e8e93; margin-top: 4px; }
+    .rating-item.ai .rating-value { color: #FF3B30; }
+    .rating-item.ai.ok .rating-value { color: #34C759; }
+
+    .reasons { padding: 20px 24px; border-bottom: 1px solid #f0f0f0; }
+    .reasons-title {
+      font-size: 12px; font-weight: 700; color: #8e8e93;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px;
+    }
+    .reason-item {
+      display: flex; gap: 12px; margin-bottom: 14px; align-items: flex-start;
+    }
+    .reason-item:last-child { margin-bottom: 0; }
+    .reason-icon {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: #fff1f0; display: flex; align-items: center;
+      justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 1px;
+    }
+    .reason-text { font-size: 13.5px; color: #3a3a3c; line-height: 1.5; }
+    .reason-text strong { color: #1c1c1e; }
+
+    .disclaimer {
+      padding: 14px 24px; font-size: 11px; color: #aeaeb2;
+      line-height: 1.5; border-bottom: 1px solid #f0f0f0;
+    }
+    .card-footer {
+      padding: 16px 24px; display: flex; align-items: center;
+      justify-content: space-between; gap: 12px;
+    }
+    .brand { font-size: 12px; font-weight: 700; color: #aeaeb2; }
+    .brand span { color: #FF3B30; }
+    .whatsapp-btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: #25D366; color: #fff; font-size: 13px; font-weight: 600;
+      padding: 9px 16px; border-radius: 50px; text-decoration: none;
+      transition: background 0.15s;
+    }
+    .whatsapp-btn:hover { background: #1ebe5c; }
+    .whatsapp-btn svg { width: 16px; height: 16px; fill: #fff; flex-shrink: 0; }
+
+    /* ── How it works ── */
+    .how {
+      max-width: 540px;
+      margin: 0 auto;
+      padding: 0 24px 52px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      text-align: center;
+    }
+    .how-item .icon { font-size: 24px; margin-bottom: 8px; }
+    .how-item h3 { font-size: 13px; font-weight: 700; color: #1c1c1e; margin-bottom: 4px; }
+    .how-item p { font-size: 12px; color: #6e6e73; line-height: 1.5; }
+
+    footer {
+      margin-top: auto;
+      border-top: 1px solid #e5e5ea;
+      padding: 16px 24px;
+      text-align: center;
+      font-size: 11px;
+      color: #aeaeb2;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="logo"><span>Rev</span>Busters</div>
+  </header>
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Are those reviews <em>real?</em></h1>
+    <p>Paste any Google Maps link. We analyse review patterns and tell you if the rating is genuine.</p>
+  </div>
+
+  <!-- Input -->
+  <div class="input-wrap">
+    <div class="input-row">
+      <input
+        type="url"
+        id="urlInput"
+        placeholder="Paste Google Maps link here…"
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck="false"
+      />
+      <button class="btn-analyze" id="analyzeBtn" onclick="runAnalysis()">Analyse</button>
+    </div>
+    <p class="input-hint">Works with any Google Maps link — full URL, share link, or maps.app.goo.gl</p>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div class="loading-msg" id="loadingMsg">Fetching reviews from Google…</div>
+    <div class="loading-sub">This takes about 45–60 seconds</div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Result -->
+  <div id="result"></div>
+
+  <!-- How it works (shown only before first analysis) -->
+  <div class="how" id="howItWorks">
+    <div class="how-item">
+      <div class="icon">🔗</div>
+      <h3>Paste any link</h3>
+      <p>Share links, full URLs — any Google Maps format works</p>
+    </div>
+    <div class="how-item">
+      <div class="icon">🤖</div>
+      <h3>AI analyses patterns</h3>
+      <p>We check for ghost accounts, velocity spikes, and copy-paste reviews</p>
+    </div>
+    <div class="how-item">
+      <div class="icon">📊</div>
+      <h3>Get the truth</h3>
+      <p>See the predicted genuine rating and share the results</p>
+    </div>
+  </div>
+
+  <footer>
+    Results are algorithmic estimates only — not a definitive verdict. &nbsp;·&nbsp; <span style="color:#FF3B30;font-weight:700;">Rev</span>Busters
+  </footer>
+
+  <script>
+    // ── Config ──────────────────────────────────────────────────────────
+    // IMPORTANT: replace this with your actual Render URL after deployment
+    const API_BASE = "https://revbusters-api.onrender.com";
+
+    // ── Warmup ping on page load ─────────────────────────────────────────
+    window.addEventListener("load", () => {
+      fetch(`${API_BASE}/ping`).catch(() => {});   // fire and forget
+    });
+
+    // ── Also ping when user focuses the input (extra warmup time) ────────
+    document.getElementById("urlInput").addEventListener("focus", () => {
+      fetch(`${API_BASE}/ping`).catch(() => {});
+    });
+
+    // ── Enter key submits ─────────────────────────────────────────────────
+    document.getElementById("urlInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") runAnalysis();
+    });
+
+    // ── Loading messages ──────────────────────────────────────────────────
+    const loadingMessages = [
+      "Fetching reviews from Google…",
+      "Scanning for ghost accounts…",
+      "Detecting velocity spikes…",
+      "Checking for copy-paste patterns…",
+      "Calculating trust score…",
+      "Almost there…",
+    ];
+    let msgInterval = null;
+
+    function startLoadingMessages() {
+      let i = 0;
+      document.getElementById("loadingMsg").textContent = loadingMessages[0];
+      msgInterval = setInterval(() => {
+        i = Math.min(i + 1, loadingMessages.length - 1);
+        document.getElementById("loadingMsg").textContent = loadingMessages[i];
+      }, 10000);
+    }
+
+    function stopLoadingMessages() {
+      clearInterval(msgInterval);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+    function shortLocation(address) {
+      if (!address) return "";
+      const parts = address.split(",").map(p => p.trim())
+        .filter(p => p && !/^\d+$/.test(p) && p.length > 2);
+      return parts.slice(-2).join(", ");
+    }
+
+    function wasvgIcon() {
+      return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+      </svg>`;
+    }
+
+    // ── Card renderer ─────────────────────────────────────────────────────
+    function renderCard(r) {
+      const location   = shortLocation(r.meta.address);
+      const aiCls      = r.trust_level === "genuine" ? "rating-item ai ok" : "rating-item ai";
+      const fakePct    = Math.max(0, Math.round((1 - r.estimated_genuine / r.total_google) * 100));
+      const waText     = `Check this fake review analysis for ${r.meta.business_name}: Google says ${r.google_rating}★ but AI predicts ${r.ai_rating}★ with ${fakePct}% suspicious reviews. revbusters.in`;
+      const waURL      = `https://wa.me/?text=${encodeURIComponent(waText)}`;
+
+      let signalsHTML = "";
+      if (r.signals && r.signals.length > 0) {
+        for (const s of r.signals) {
+          signalsHTML += `
+          <div class="reason-item">
+            <div class="reason-icon">${s.icon}</div>
+            <div class="reason-text"><strong>${s.title}</strong> — ${s.detail}</div>
+          </div>`;
+        }
+      } else {
+        signalsHTML = `
+          <div class="reason-item">
+            <div class="reason-icon">✅</div>
+            <div class="reason-text"><strong>No major signals detected</strong> — review patterns appear consistent with genuine activity.</div>
+          </div>`;
+      }
+
+      return `
+      <div class="card">
+        <div class="card-header ${r.trust_level}">
+          <div class="trust-badge"><span class="dot"></span> ${r.trust_label}</div>
+          <div class="business-name">${r.meta.business_name}</div>
+          <div class="business-meta">${location}</div>
+        </div>
+        <div class="ratings">
+          <div class="rating-item">
+            <div class="rating-label">Google Rating</div>
+            <div class="rating-value"><span class="star">★</span> ${r.google_rating}</div>
+            <div class="rating-count">${r.total_google.toLocaleString()} reviews</div>
+          </div>
+          <div class="${aiCls}">
+            <div class="rating-label">AI Predicted</div>
+            <div class="rating-value"><span class="star">★</span> ${r.ai_rating}</div>
+            <div class="rating-count">~${r.estimated_genuine.toLocaleString()} genuine reviews</div>
+          </div>
+        </div>
+        <div class="reasons">
+          <div class="reasons-title">Signals detected</div>
+          ${signalsHTML}
+        </div>
+        <div class="disclaimer">
+          Algorithmic estimate only — indicates suspicious patterns, not a definitive conclusion.
+          We recommend reading reviews directly before deciding.
+        </div>
+        <div class="card-footer">
+          <div class="brand"><span>Rev</span>Busters</div>
+          <a class="whatsapp-btn" href="${waURL}" target="_blank">
+            ${wasvgIcon()} Share on WhatsApp
+          </a>
+        </div>
+      </div>`;
+    }
+
+    // ── Main analysis function ────────────────────────────────────────────
+    async function runAnalysis() {
+      const url   = document.getElementById("urlInput").value.trim();
+      const btn   = document.getElementById("analyzeBtn");
+      const load  = document.getElementById("loading");
+      const err   = document.getElementById("errorBox");
+      const res   = document.getElementById("result");
+      const how   = document.getElementById("howItWorks");
+
+      if (!url) {
+        document.getElementById("urlInput").focus();
+        return;
+      }
+
+      // Reset UI
+      err.classList.remove("visible");
+      res.classList.remove("visible");
+      res.innerHTML = "";
+      load.classList.add("visible");
+      btn.disabled = true;
+      how.style.display = "none";
+      startLoadingMessages();
+
+      try {
+        const response = await fetch(`${API_BASE}/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data.error) {
+          throw new Error(data.error || "Something went wrong. Please try again.");
+        }
+
+        res.innerHTML = renderCard(data);
+        res.classList.add("visible");
+
+        // Scroll to card
+        res.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      } catch (e) {
+        err.textContent = e.message;
+        err.classList.add("visible");
+        how.style.display = "";
+      } finally {
+        load.classList.remove("visible");
+        btn.disabled = false;
+        stopLoadingMessages();
+      }
+    }
+  </script>
+
+</body>
+</html>
