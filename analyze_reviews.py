@@ -76,16 +76,16 @@ Short or vague reviews with no fake AND no genuine signals. No-text ratings from
 Estimate the TRUE RATING (1.0–5.0, one decimal) the business deserves based ONLY on genuine reviews. Weight by specificity, sentiment, and credibility. Negative reviews from experienced reviewers count heavily.
 
 ━━━ STEP 4: SIGNALS ━━━
-Write 2–3 SHORT, SPECIFIC signals based on what you actually found in the reviews.
+Write 2–3 signals. Keep every "detail" field to ONE SHORT SENTENCE — max 20 words. Lead with the fact, skip filler.
 
-If SUSPICIOUS or HIGHLY SUSPICIOUS: write the 2–3 strongest red flags with real examples from the reviews.
-Format: {"icon": "🚩", "title": "<short headline>", "detail": "<1–2 sentences with specific evidence e.g. exact quote or count>"}
-Icons to use: 🚩 for fake/ghost patterns, 📍 for SEO stuffing, 🤖 for templated reviews, 👥 for ghost accounts
-End with a "summary" signal: {"icon": "💬", "title": "Bottom line", "detail": "<1 sentence verdict e.g. 'The place looks genuinely decent but someone pushed the rating with bulk ghost ratings'>"}
+If SUSPICIOUS or HIGHLY SUSPICIOUS: write the 2–3 strongest red flags.
+Format: {"icon": "🚩", "title": "<short headline>", "detail": "<one punchy sentence with a specific number or quote>"}
+Icons: 🚩 fake/ghost, 📍 SEO stuffing, 🤖 templated, 👥 ghost accounts
+End with: {"icon": "💬", "title": "Bottom line", "detail": "<one sentence verdict>"}
 
-If GENUINE: write 1–2 signals showing WHY it looks genuine with real examples.
-Format: {"icon": "✅", "title": "<short headline>", "detail": "<specific evidence e.g. quote, staff name, detail>"}
-End with: {"icon": "💬", "title": "Bottom line", "detail": "<1 sentence e.g. 'Reviews are varied, personal, and credible — this place looks genuinely good'>"}
+If GENUINE: write 1–2 signals showing WHY it looks genuine.
+Format: {"icon": "✅", "title": "<short headline>", "detail": "<one sentence with a specific detail, name, or quote>"}
+End with: {"icon": "💬", "title": "Bottom line", "detail": "<one sentence>"}
 
 Return ONLY a JSON object — no markdown, no explanation:
 {

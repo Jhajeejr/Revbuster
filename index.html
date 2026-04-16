@@ -597,6 +597,34 @@
 
     // ── History card detail modal ─────────────────────────────────────────
     const _historyStore = {};   // id → full item from Supabase
+    let _allHistoryItems = [];
+    let _historyShown    = 0;
+    const HISTORY_PAGE   = 6;
+
+    function showMoreHistory() {
+      const list  = document.getElementById("historyList");
+      const batch = _allHistoryItems.slice(_historyShown, _historyShown + HISTORY_PAGE);
+      batch.forEach(item => {
+        list.insertAdjacentHTML("beforeend", renderHistoryCard(item));
+      });
+      _historyShown += batch.length;
+
+      // Remove old "View more" button if present
+      const old = document.getElementById("historyViewMore");
+      if (old) old.remove();
+
+      // Add "View more" if there are more items
+      if (_historyShown < _allHistoryItems.length) {
+        list.insertAdjacentHTML("afterend", `
+          <button id="historyViewMore" onclick="showMoreHistory()" style="
+            display:block; width:100%; margin-top:4px; margin-bottom:40px;
+            padding:12px; background:#fff; border:none; border-radius:12px;
+            font-size:13px; font-weight:700; color:#FF3B30; cursor:pointer;
+            box-shadow:0 1px 6px rgba(0,0,0,0.07);">
+            View more ↓ (${_allHistoryItems.length - _historyShown} remaining)
+          </button>`);
+      }
+    }
 
     function closeHistoryModal(e) {
       if (e.target === document.getElementById('historyModal')) {
@@ -659,8 +687,10 @@
         }
 
         // Render history cards (always show, including on result page)
-        const html = items.slice(0, 10).map(item => renderHistoryCard(item)).join("");
-        document.getElementById("historyContent").innerHTML = `<div class="history-list">${html}</div>`;
+        _allHistoryItems = items;
+        _historyShown = 0;
+        document.getElementById("historyContent").innerHTML = `<div class="history-list" id="historyList"></div>`;
+        showMoreHistory();
         document.getElementById("historySection").classList.add("visible");
       } catch (e) {
         // Silently fail — keep section hidden on error
@@ -828,6 +858,11 @@
             <div class="ai-score-hint">Tap to learn how ↗</div>
           </div>
         </div>
+        <div style="padding:12px 24px;border-bottom:1px solid #f0f0f0;">
+          <button class="whatsapp-btn" style="width:100%;justify-content:center;" onclick="${shareFn}">
+            ${wasvgIcon()} Share on WhatsApp
+          </button>
+        </div>
         ${middleSection}
         <div class="disclaimer">
           Algorithmic estimate only — indicates suspicious patterns, not a definitive conclusion.
@@ -835,9 +870,6 @@
         </div>
         <div class="card-footer">
           <div class="brand"><span>Rev</span>Busters</div>
-          <button class="whatsapp-btn" onclick="${shareFn}">
-            ${wasvgIcon()} Share on WhatsApp
-          </button>
         </div>
       </div>`;
     }

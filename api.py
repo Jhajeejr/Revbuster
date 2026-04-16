@@ -198,7 +198,7 @@ def get_history():
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
         return jsonify([])
     try:
-        url      = f"{SUPABASE_URL}/rest/v1/analyses?select=*&order=created_at.desc&limit=50"
+        url      = f"{SUPABASE_URL}/rest/v1/analyses?select=*&order=created_at.desc&limit=200"
         response = requests.get(url, headers=_sb_headers(), timeout=8)
         if response.status_code == 200:
             return jsonify(response.json())
