@@ -777,22 +777,31 @@
       const shareFn   = isModal ? `shareOnWhatsAppModal('${safeName}')` : `shareOnWhatsApp('${safeName}')`;
 
       let middleSection = "";
-      if (r.trust_level === "genuine") {
-        middleSection = `
-        <div class="genuine-msg">
-          ✅ &nbsp;This place appears to have genuine reviews. No significant patterns of manipulation were detected.
-        </div>`;
-      } else {
-        let signalsHTML = "";
-        if (r.signals && r.signals.length > 0) {
-          for (const s of r.signals) {
-            signalsHTML += `
-            <div class="reason-item">
-              <div class="reason-icon">${s.icon}</div>
-              <div class="reason-text"><strong>${s.title}</strong> — ${s.detail}</div>
-            </div>`;
-          }
+      let signalsHTML = "";
+      if (r.signals && r.signals.length > 0) {
+        for (const s of r.signals) {
+          signalsHTML += `
+          <div class="reason-item">
+            <div class="reason-icon">${s.icon}</div>
+            <div class="reason-text"><strong>${s.title}</strong> — ${s.detail}</div>
+          </div>`;
         }
+      }
+
+      if (r.trust_level === "genuine") {
+        if (signalsHTML) {
+          middleSection = `
+          <div class="reasons">
+            <div class="reasons-title">Why we trust it</div>
+            ${signalsHTML}
+          </div>`;
+        } else {
+          middleSection = `
+          <div class="genuine-msg">
+            ✅ &nbsp;This place appears to have genuine reviews. No significant patterns of manipulation were detected.
+          </div>`;
+        }
+      } else {
         middleSection = `
         <div class="reasons">
           <div class="reasons-title">Signals detected</div>
