@@ -362,6 +362,34 @@
       color: #8e8e93;
     }
 
+    /* ── History detail modal ── */
+    #historyModal .modal-sheet {
+      background: #f0f2f5;
+      border-radius: 20px 20px 0 0;
+      padding: 20px 16px 36px;
+      max-width: 480px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: slideUp 0.25s ease;
+    }
+    #historyModal .modal-sheet .card {
+      box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+    }
+    #historyModal .modal-close-btn {
+      width: 100%;
+      margin-top: 14px;
+      padding: 13px;
+      background: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #1c1c1e;
+      cursor: pointer;
+    }
+    #historyModal .modal-close-btn:hover { background: #e5e7ea; }
+
     /* ── How it works ── */
     .how {
       max-width: 540px;
@@ -514,6 +542,14 @@
     Results are algorithmic estimates only — not a definitive verdict. &nbsp;·&nbsp; <span style="color:#FF3B30;font-weight:700;">Rev</span>Busters
   </footer>
 
+  <!-- History card detail modal -->
+  <div class="modal-overlay" id="historyModal" onclick="closeHistoryModal(event)">
+    <div class="modal-sheet">
+      <div id="historyModalContent"></div>
+      <button class="modal-close-btn" onclick="document.getElementById('historyModal').classList.remove('visible')">Close</button>
+    </div>
+  </div>
+
   <!-- AI Score explanation modal -->
   <div class="modal-overlay" id="aiModal" onclick="closeAiModal(event)">
     <div class="modal">
@@ -559,6 +595,55 @@
       }
     }
 
+    // ── History card detail modal ─────────────────────────────────────────
+    const _historyStore = {};   // id → full item from Supabase
+
+    function closeHistoryModal(e) {
+      if (e.target === document.getElementById('historyModal')) {
+        document.getElementById('historyModal').classList.remove('visible');
+      }
+    }
+
+    function openHistoryModal(id) {
+      const item = _historyStore[id];
+      if (!item) return;
+      const r = {
+        meta:         { business_name: item.business_name, address: item.address, category: item.category },
+        trust_level:  item.trust_level,
+        trust_label:  item.trust_label,
+        google_rating:item.google_rating,
+        ai_rating:    item.ai_rating,
+        suspicious_pct: item.suspicious_pct,
+        genuine_pct:  item.genuine_pct,
+        uncertain_pct:item.uncertain_pct,
+        total_google: item.total_google,
+        signals:      item.signals || [],
+      };
+      document.getElementById('historyModalContent').innerHTML = renderCard(r, true);
+      document.getElementById('historyModal').classList.add('visible');
+    }
+
+    // WhatsApp share from inside history modal
+    async function shareOnWhatsAppModal(businessName) {
+      gtag('event', 'share_whatsapp_modal', { business_name: businessName });
+      const cardEl  = document.querySelector('#historyModalContent .card');
+      const siteURL = "https://jhajeejr.github.io/Revbuster/";
+      const text    = `I checked the reviews for ${businessName} on RevBusters — see if they're genuine or suspicious. Check any place here: ${siteURL}`;
+      try {
+        const canvas = await html2canvas(cardEl, { scale: 2, useCORS: true });
+        canvas.toBlob(async (blob) => {
+          const file = new File([blob], "revbusters-analysis.png", { type: "image/png" });
+          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], text });
+          } else {
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+          }
+        }, "image/png");
+      } catch (e) {
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+      }
+    }
+
     // ── Load history on page load ───────────────────────────────────────
     async function loadHistory() {
       try {
@@ -569,24 +654,26 @@
         if (!Array.isArray(items) || items.length === 0) {
           document.getElementById("historyContent").innerHTML =
             '<div class="history-empty">No places analyzed yet — be the first!</div>';
+          document.getElementById("historySection").classList.add("visible");
           return;
         }
 
-        // Render history cards
+        // Render history cards (always show, including on result page)
         const html = items.slice(0, 10).map(item => renderHistoryCard(item)).join("");
         document.getElementById("historyContent").innerHTML = `<div class="history-list">${html}</div>`;
         document.getElementById("historySection").classList.add("visible");
       } catch (e) {
-        // Silently fail — hide history section
-        document.getElementById("historySection").classList.remove("visible");
+        // Silently fail — keep section hidden on error
       }
     }
 
     function renderHistoryCard(item) {
-      const location = shortLocation(item.address);
+      if (item.id) _historyStore[item.id] = item;   // store for modal lookup
+      const location   = shortLocation(item.address);
       const trustLevel = item.trust_level || "suspicious";
+      const clickAttr  = item.id ? `onclick="openHistoryModal('${item.id}')"` : "";
       return `
-        <div class="history-card ${trustLevel}">
+        <div class="history-card ${trustLevel}" ${clickAttr}>
           <div class="history-card-header">
             <div class="history-card-name">${item.business_name || "Unknown"}</div>
             <span class="history-card-badge ${trustLevel}">${item.trust_label || "Unknown"}</span>
@@ -602,7 +689,7 @@
               <span class="value ai">★ ${item.ai_rating || "—"}</span>
             </div>
           </div>
-          <div class="history-card-suspicious">${item.suspicious_pct || 0}% suspicious</div>
+          <div class="history-card-suspicious">${item.suspicious_pct || 0}% suspicious · Tap for details ↗</div>
         </div>`;
     }
 
@@ -683,10 +770,11 @@
     }
 
     // ── Card renderer ─────────────────────────────────────────────────────
-    function renderCard(r) {
-      const location = shortLocation(r.meta.address);
-      const aiCls    = r.trust_level === "genuine" ? "rating-item ai ok" : "rating-item ai";
-      const safeName = (r.meta.business_name || "").replace(/'/g, "\\'");
+    function renderCard(r, isModal = false) {
+      const location  = shortLocation(r.meta.address);
+      const aiCls     = r.trust_level === "genuine" ? "rating-item ai ok" : "rating-item ai";
+      const safeName  = (r.meta.business_name || "").replace(/'/g, "\\'");
+      const shareFn   = isModal ? `shareOnWhatsAppModal('${safeName}')` : `shareOnWhatsApp('${safeName}')`;
 
       let middleSection = "";
       if (r.trust_level === "genuine") {
@@ -738,7 +826,7 @@
         </div>
         <div class="card-footer">
           <div class="brand"><span>Rev</span>Busters</div>
-          <button class="whatsapp-btn" onclick="shareOnWhatsApp('${safeName}')">
+          <button class="whatsapp-btn" onclick="${shareFn}">
             ${wasvgIcon()} Share on WhatsApp
           </button>
         </div>
