@@ -192,6 +192,31 @@ def analyze_url():
         return jsonify({"error": f"{type(e).__name__}: {str(e)}"}), 500
 
 
+@app.route("/analyze-text", methods=["POST", "OPTIONS"])
+def analyze_text():
+    """
+    Chrome extension endpoint — receives reviews already extracted from the DOM,
+    skips scraping, runs LLM analysis and returns the same result shape as /analyze.
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    body        = request.get_json(silent=True) or {}
+    reviews_data = body.get("reviews_data")
+
+    if not reviews_data or not reviews_data.get("reviews"):
+        return jsonify({"error": "reviews_data with at least one review is required"}), 400
+
+    try:
+        result = analyze(reviews_data)
+        save_to_supabase(result)
+        return jsonify(_sanitize(result))
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": f"{type(e).__name__}: {str(e)}"}), 500
+
+
 @app.route("/history", methods=["GET"])
 def get_history():
     """Return last 50 analyses from Supabase."""
