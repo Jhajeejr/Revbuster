@@ -3,11 +3,13 @@ RevBusters – Flask API
 Endpoints:
   GET  /ping     → warmup / health check
   POST /analyze  → { "url": "..." } → analysis JSON
+  GET  /history → last 50 analyses
 """
 
 import os
 import json
 import traceback
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -20,6 +22,9 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
@@ -31,6 +36,9 @@ def add_cors_headers(response):
 def analyze_preflight():
     return "", 204
 
+@app.route("/history", methods=["OPTIONS"])
+def history_preflight():
+    return "", 204
 
 @app.route("/ping", methods=["GET"])
 def ping():
@@ -58,6 +66,9 @@ def analyze_url():
         print(f"[analyze] Running analysis...")
         result = analyze(reviews_data)
 
+        # Save to Supabase
+        save_to_supabase(result)
+
         # Make result JSON-safe (remove datetime objects etc.)
         return jsonify(_sanitize(result))
 
@@ -66,6 +77,73 @@ def analyze_url():
         import sys
         print(f"[ERROR] {type(e).__name__}: {e}", file=sys.stderr)
         return jsonify({"error": f"{type(e).__name__}: {str(e)}"}), 500
+
+
+@app.route("/history", methods=["GET"])
+def get_history():
+    """Return last 50 analyses from Supabase."""
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return jsonify([])
+
+    try:
+        headers = {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+            "Content-Type": "application/json",
+        }
+        url = f"{SUPABASE_URL}/rest/v1/analyses?select=*&order=created_at.desc&limit=50"
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            print(f"[history] Supabase error: {response.status_code} {response.text}")
+            return jsonify([])
+    except Exception as e:
+        print(f"[history] Error fetching history: {e}")
+        return jsonify([])
+
+
+def save_to_supabase(result):
+    """Save analysis result to Supabase analyses table."""
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return
+
+    try:
+        # Extract data from result
+        meta = result.get("meta", {})
+        stats = result.get("stats", {})
+        signals = result.get("signals", [])
+
+        payload = {
+            "business_name": meta.get("business_name"),
+            "address": meta.get("address"),
+            "category": meta.get("category"),
+            "google_rating": stats.get("google_rating"),
+            "ai_rating": stats.get("ai_rating"),
+            "trust_level": stats.get("trust_level"),
+            "trust_label": stats.get("trust_label"),
+            "suspicious_pct": stats.get("suspicious_pct"),
+            "genuine_pct": stats.get("genuine_pct"),
+            "uncertain_pct": stats.get("uncertain_pct"),
+            "total_google": stats.get("total_google"),
+            "signals": signals,
+        }
+
+        headers = {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        }
+
+        url = f"{SUPABASE_URL}/rest/v1/analyses"
+        response = requests.post(url, json=payload, headers=headers)
+
+        if response.status_code not in (200, 201):
+            print(f"[save_to_supabase] Error: {response.status_code} {response.text}")
+    except Exception as e:
+        print(f"[save_to_supabase] Exception: {e}")
 
 
 def _sanitize(obj):

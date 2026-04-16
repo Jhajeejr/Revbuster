@@ -241,6 +241,127 @@
     .whatsapp-btn:hover { background: #1ebe5c; }
     .whatsapp-btn svg { width: 16px; height: 16px; fill: #fff; flex-shrink: 0; }
 
+    /* ── History / Recently Analyzed ── */
+    .history-section {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 36px 24px 0;
+      display: none;
+    }
+    .history-section.visible { display: block; }
+    .history-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1c1c1e;
+      margin-bottom: 12px;
+      letter-spacing: -0.3px;
+    }
+    .history-divider {
+      height: 1px;
+      background: #e5e5ea;
+      margin-bottom: 20px;
+    }
+    .history-empty {
+      text-align: center;
+      padding: 40px 24px;
+      font-size: 14px;
+      color: #6e6e73;
+      line-height: 1.6;
+    }
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 40px;
+    }
+    .history-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      border-left: 4px solid #f0f0f0;
+    }
+    .history-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+    }
+    .history-card.genuine { border-left-color: #34C759; }
+    .history-card.suspicious { border-left-color: #FF9500; }
+    .history-card.highly-suspicious { border-left-color: #FF3B30; }
+    .history-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+      gap: 12px;
+    }
+    .history-card-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1c1c1e;
+      flex: 1;
+    }
+    .history-card-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .history-card-badge.genuine {
+      background: #d1f4e0;
+      color: #1c6e2e;
+    }
+    .history-card-badge.suspicious {
+      background: #fff0e0;
+      color: #963b00;
+    }
+    .history-card-badge.highly-suspicious {
+      background: #ffe0dc;
+      color: #7d2a23;
+    }
+    .history-card-meta {
+      font-size: 12px;
+      color: #6e6e73;
+      margin-bottom: 10px;
+    }
+    .history-card-ratings {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .history-card-rating {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .history-card-rating .label {
+      color: #8e8e93;
+      font-weight: 600;
+    }
+    .history-card-rating .value {
+      font-weight: 700;
+      color: #1c1c1e;
+    }
+    .history-card-rating .value.ai {
+      color: #FF3B30;
+    }
+    .history-card-rating.genuine .value.ai {
+      color: #34C759;
+    }
+    .history-card-suspicious {
+      font-size: 11px;
+      color: #8e8e93;
+    }
+
     /* ── How it works ── */
     .how {
       max-width: 540px;
@@ -361,6 +482,15 @@
   <!-- Result -->
   <div id="result"></div>
 
+  <!-- Recently Analyzed / History -->
+  <div class="history-section" id="historySection">
+    <div class="history-title">Recently Analyzed</div>
+    <div class="history-divider"></div>
+    <div id="historyContent">
+      <div class="history-empty">Loading history…</div>
+    </div>
+  </div>
+
   <!-- How it works (shown only before first analysis) -->
   <div class="how" id="howItWorks">
     <div class="how-item">
@@ -429,9 +559,57 @@
       }
     }
 
+    // ── Load history on page load ───────────────────────────────────────
+    async function loadHistory() {
+      try {
+        const response = await fetch(`${API_BASE}/history`);
+        if (!response.ok) throw new Error("Failed to fetch history");
+
+        const items = await response.json();
+        if (!Array.isArray(items) || items.length === 0) {
+          document.getElementById("historyContent").innerHTML =
+            '<div class="history-empty">No places analyzed yet — be the first!</div>';
+          return;
+        }
+
+        // Render history cards
+        const html = items.slice(0, 10).map(item => renderHistoryCard(item)).join("");
+        document.getElementById("historyContent").innerHTML = `<div class="history-list">${html}</div>`;
+        document.getElementById("historySection").classList.add("visible");
+      } catch (e) {
+        // Silently fail — hide history section
+        document.getElementById("historySection").classList.remove("visible");
+      }
+    }
+
+    function renderHistoryCard(item) {
+      const location = shortLocation(item.address);
+      const trustLevel = item.trust_level || "suspicious";
+      return `
+        <div class="history-card ${trustLevel}">
+          <div class="history-card-header">
+            <div class="history-card-name">${item.business_name || "Unknown"}</div>
+            <span class="history-card-badge ${trustLevel}">${item.trust_label || "Unknown"}</span>
+          </div>
+          <div class="history-card-meta">${location}</div>
+          <div class="history-card-ratings">
+            <div class="history-card-rating">
+              <span class="label">Google:</span>
+              <span class="value">★ ${item.google_rating || "—"}</span>
+            </div>
+            <div class="history-card-rating ${trustLevel}">
+              <span class="label">AI:</span>
+              <span class="value ai">★ ${item.ai_rating || "—"}</span>
+            </div>
+          </div>
+          <div class="history-card-suspicious">${item.suspicious_pct || 0}% suspicious</div>
+        </div>`;
+    }
+
     // ── Warmup ping on page load ─────────────────────────────────────────
     window.addEventListener("load", () => {
       fetch(`${API_BASE}/ping`).catch(() => {});   // fire and forget
+      loadHistory();
     });
 
     // ── Also ping when user focuses the input (extra warmup time) ────────
@@ -605,6 +783,9 @@
 
         res.innerHTML = renderCard(data);
         res.classList.add("visible");
+
+        // Refresh history to show new analysis at top
+        loadHistory();
 
         // Scroll to card
         res.scrollIntoView({ behavior: "smooth", block: "start" });

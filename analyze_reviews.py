@@ -75,12 +75,28 @@ Short or vague reviews with no fake AND no genuine signals. No-text ratings from
 ━━━ STEP 3: TRUE RATING ━━━
 Estimate the TRUE RATING (1.0–5.0, one decimal) the business deserves based ONLY on genuine reviews. Weight by specificity, sentiment, and credibility. Negative reviews from experienced reviewers count heavily.
 
+━━━ STEP 4: SIGNALS ━━━
+Write 2–3 SHORT, SPECIFIC signals based on what you actually found in the reviews.
+
+If SUSPICIOUS or HIGHLY SUSPICIOUS: write the 2–3 strongest red flags with real examples from the reviews.
+Format: {"icon": "🚩", "title": "<short headline>", "detail": "<1–2 sentences with specific evidence e.g. exact quote or count>"}
+Icons to use: 🚩 for fake/ghost patterns, 📍 for SEO stuffing, 🤖 for templated reviews, 👥 for ghost accounts
+End with a "summary" signal: {"icon": "💬", "title": "Bottom line", "detail": "<1 sentence verdict e.g. 'The place looks genuinely decent but someone pushed the rating with bulk ghost ratings'>"}
+
+If GENUINE: write 1–2 signals showing WHY it looks genuine with real examples.
+Format: {"icon": "✅", "title": "<short headline>", "detail": "<specific evidence e.g. quote, staff name, detail>"}
+End with: {"icon": "💬", "title": "Bottom line", "detail": "<1 sentence e.g. 'Reviews are varied, personal, and credible — this place looks genuinely good'>"}
+
 Return ONLY a JSON object — no markdown, no explanation:
 {
   "fake": <count>,
   "genuine": <count>,
   "uncertain": <count>,
-  "true_rating": <float>
+  "true_rating": <float>,
+  "signals": [
+    {"icon": "...", "title": "...", "detail": "..."},
+    ...
+  ]
 }"""
 
 HIGHLY_SUSPICIOUS_THRESHOLD = 35
@@ -118,7 +134,7 @@ def analyze(reviews_data: dict) -> dict:
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=2000,
+        max_tokens=3000,
         messages=[{"role": "user", "content": PROMPT + "\n\n" + user_msg}],
     )
 
@@ -135,7 +151,6 @@ def analyze(reviews_data: dict) -> dict:
     fake_pct      = round(llm["fake"]      / total * 100) if total > 0 else 0
     genuine_pct   = round(llm["genuine"]   / total * 100) if total > 0 else 0
     uncertain_pct = round(llm["uncertain"] / total * 100) if total > 0 else 0
-    ai_rating     = round(float(llm["true_rating"]), 1)
     google_rating = meta.get("total_google_rating") or 5.0
 
     # Trust level
@@ -149,28 +164,21 @@ def analyze(reviews_data: dict) -> dict:
         trust_level = "genuine"
         trust_label = "Genuine"
 
+    # If genuine, AI rating = Google rating (no fake reviews to filter out)
+    if trust_level == "genuine":
+        ai_rating = round(float(google_rating), 1)
+    else:
+        ai_rating = round(float(llm["true_rating"]), 1)
+
     suspicious_pct = fake_pct   # rename for user-facing output
 
-    # Build signals
-    signals = []
-    if suspicious_pct >= 30:
-        signals.append({
-            "icon":   "🤖",
-            "title":  f"{suspicious_pct}% reviews are suspicious",
-            "detail": "AI detected coordinated patterns — templated text, scripted promotions, or suspicious reviewer profiles repeating across multiple reviews.",
-        })
-    if genuine_pct <= 20 and suspicious_pct >= 20:
-        signals.append({
-            "icon":   "👥",
-            "title":  f"Only {genuine_pct}% reviews appear genuine",
-            "detail": "Very few reviews show authentic personal experience, specific details, or natural language that indicates a real customer.",
-        })
-    if uncertain_pct >= 40:
-        signals.append({
-            "icon":   "❓",
-            "title":  f"{uncertain_pct}% reviews are low-signal",
-            "detail": "A large share of reviews are too short or vague to verify — typical when fake campaigns dilute review quality.",
-        })
+    # Use LLM-generated signals; fall back to generic if missing
+    signals = llm.get("signals") or []
+    if not signals:
+        if suspicious_pct >= 30:
+            signals.append({"icon": "🤖", "title": f"{suspicious_pct}% reviews are suspicious", "detail": "AI detected coordinated patterns across reviews."})
+        if uncertain_pct >= 40:
+            signals.append({"icon": "❓", "title": f"{uncertain_pct}% reviews are low-signal", "detail": "A large share of reviews are too short or vague to verify."})
 
     return {
         "meta":           meta,
