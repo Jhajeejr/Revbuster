@@ -171,9 +171,16 @@ def analyze_url():
             print(f"[analyze] Cache hit → {cached.get('business_name')}")
             return jsonify(row_to_result(cached))
 
-        # ── Full scrape + LLM analysis ───────────────────────────────────
-        print(f"[analyze] Cache miss — scraping: {url}")
-        reviews_data = scrape_reviews(url)
+        # ── Apify cache check (skip re-scraping if dataset exists) ───────
+        apify_dataset_id = lookup_apify_dataset(place_id, norm_url)
+
+        if apify_dataset_id:
+            print(f"[analyze] Apify cache hit — reusing dataset {apify_dataset_id}")
+            reviews_data = fetch_from_apify(apify_dataset_id)
+        else:
+            print(f"[analyze] Scraping fresh: {url}")
+            reviews_data = scrape_reviews(url)
+            apify_dataset_id = reviews_data.get("apify_dataset_id")
 
         if not reviews_data.get("reviews"):
             return jsonify({"error": "No reviews found for this place"}), 404
@@ -181,7 +188,7 @@ def analyze_url():
         print("[analyze] Running LLM analysis…")
         result = analyze(reviews_data)
 
-        save_to_supabase(result, place_id=place_id, place_url=norm_url)
+        save_to_supabase(result, place_id=place_id, place_url=norm_url, apify_dataset_id=apify_dataset_id)
 
         return jsonify(_sanitize(result))
 
@@ -234,7 +241,50 @@ def get_history():
         return jsonify([])
 
 
-def save_to_supabase(result, place_id=None, place_url=None):
+def lookup_apify_dataset(place_id, norm_url):
+    """Return stored Apify dataset ID for a place, or None."""
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return None
+    try:
+        base = f"{SUPABASE_URL}/rest/v1/analyses"
+        h = _sb_headers()
+        for field, val in [("place_id", place_id), ("place_url", norm_url)]:
+            if not val:
+                continue
+            r = requests.get(
+                f"{base}?{field}=eq.{requests.utils.quote(val, safe='')}&select=apify_dataset_id&limit=1",
+                headers=h, timeout=8
+            )
+            if r.status_code == 200:
+                rows = r.json()
+                if rows and rows[0].get("apify_dataset_id"):
+                    return rows[0]["apify_dataset_id"]
+    except Exception as e:
+        print(f"[apify cache] lookup error: {e}")
+    return None
+
+
+def fetch_from_apify(dataset_id):
+    """Fetch review items from an existing Apify dataset."""
+    url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?format=json&clean=false"
+    r = requests.get(url, timeout=30)
+    raw = r.json()
+    if not raw:
+        return {"meta": {}, "reviews": []}
+    first = raw[0]
+    meta = {
+        "business_name": first.get("title"),
+        "address": first.get("address"),
+        "category": first.get("categoryName"),
+        "total_google_rating": first.get("totalScore"),
+        "total_google_reviews": first.get("reviewsCount"),
+        "kgmid": first.get("kgmid"),
+        "cid": first.get("cid"),
+    }
+    return {"meta": meta, "reviews": raw, "apify_dataset_id": dataset_id}
+
+
+def save_to_supabase(result, place_id=None, place_url=None, apify_dataset_id=None):
     """Persist an analysis result to Supabase."""
     if not SUPABASE_URL or not SUPABASE_ANON_KEY:
         return
@@ -253,8 +303,9 @@ def save_to_supabase(result, place_id=None, place_url=None):
             "uncertain_pct": result.get("uncertain_pct"),
             "total_google":  result.get("total_google"),
             "signals":       result.get("signals", []),
-            "place_id":      place_id,
-            "place_url":     place_url,
+            "place_id":           place_id,
+            "place_url":          place_url,
+            "apify_dataset_id":   apify_dataset_id,
         }
         url      = f"{SUPABASE_URL}/rest/v1/analyses"
         response = requests.post(url, json=payload, headers=_sb_headers(prefer_minimal=True), timeout=10)

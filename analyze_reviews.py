@@ -7,6 +7,7 @@ No pre-computed stats — Gemini performs all pattern identification itself.
 import json
 import re
 import os
+import time
 from google import genai
 from dotenv import load_dotenv
 
@@ -18,6 +19,8 @@ _client = genai.Client(api_key=GEMINI_API_KEY)
 PROMPT = """You are an expert at detecting fake Google reviews for ANY local business — restaurants, salons, spas, dentists, clinics, diagnostic labs, service shops, hotels, online delivery/gifting services, retail stores, etc.
 
 Read ALL the reviews below as a complete dataset, not one by one. Your job is to identify coordinated manipulation patterns that only become visible when you look across many reviews together.
+
+IMPORTANT DATE CONTEXT: Today's date is 2026. Reviews from 2024, 2025, and 2026 are all normal and valid — do NOT flag these as suspicious. Only flag dates that are clearly impossible (e.g., years like 2030+).
 
 ━━━ STEP 1: CROSS-REVIEW PATTERN SCAN (do this first) ━━━
 Before classifying anything, scan the full set and note:
@@ -49,11 +52,13 @@ PREMIUM / HOTEL SPA / HIGH-END:
 • Look for corroborating signals (voice uniformity, templated batches) before calling suspicious.
 
 ━━━ STEP 2: CLASSIFY EACH REVIEW ━━━
-• "fake"     → clear evidence of coordination or scripted behaviour
+• "fake"     → clear evidence of coordination or scripted behaviour (label this as "suspicious" in all output text — never use the word "fake")
 • "genuine"  → clearly authentic human experience
 • "uncertain"→ not enough signal either way
 
-FAKE signals:
+IMPORTANT: In all signal titles and details, never use the word "fake". Use "suspicious" instead.
+
+SUSPICIOUS signals (label as suspicious, not fake):
 • Templated batch: 3+ reviews with near-identical structure and word swaps (strongest signal)
 • Near-duplicate phrasing across different accounts
 • SEO location/keyword stuffing in review text
@@ -132,12 +137,34 @@ def analyze(reviews_data: dict) -> dict:
         f"REVIEWS JSON:\n{json.dumps(compact, ensure_ascii=False)}"
     )
 
-    response = _client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=PROMPT + "\n\n" + user_msg,
-    )
-
-    raw_text = response.text.strip()
+    # Fallback chain — try each model with 2 retries before moving to next
+    MODELS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"]
+    last_error = None
+    raw_text = None
+    for model in MODELS:
+        for attempt in range(2):
+            try:
+                print(f"[analyze] Trying {model} (attempt {attempt + 1})...")
+                response = _client.models.generate_content(
+                    model=model,
+                    contents=PROMPT + "\n\n" + user_msg,
+                )
+                raw_text = response.text.strip()
+                print(f"[analyze] Success with {model}")
+                break
+            except Exception as e:
+                last_error = e
+                err = str(e)
+                print(f"[analyze] {model} attempt {attempt + 1} failed: {err[:80]}")
+                # Only retry on 503 (busy), not on 404 (model not found) or 429 (quota)
+                if "503" in err and attempt == 0:
+                    time.sleep(5)
+                else:
+                    break
+        if raw_text is not None:
+            break
+    if raw_text is None:
+        raise last_error
     # Strip markdown code fences if present
     clean = re.sub(r'```(?:json)?\s*', '', raw_text).strip()
     # Extract first JSON object found in the response
@@ -163,11 +190,8 @@ def analyze(reviews_data: dict) -> dict:
         trust_level = "genuine"
         trust_label = "Genuine"
 
-    # If genuine, AI rating = Google rating (no fake reviews to filter out)
-    if trust_level == "genuine":
-        ai_rating = round(float(google_rating), 1)
-    else:
-        ai_rating = round(float(llm["true_rating"]), 1)
+    # AI rating always uses the LLM's true_rating (based only on genuine reviews)
+    ai_rating = round(float(llm["true_rating"]), 1)
 
     suspicious_pct = fake_pct   # rename for user-facing output
 
@@ -175,7 +199,7 @@ def analyze(reviews_data: dict) -> dict:
     signals = llm.get("signals") or []
     if not signals:
         if suspicious_pct >= 30:
-            signals.append({"icon": "🤖", "title": f"{suspicious_pct}% reviews are suspicious", "detail": "AI detected coordinated patterns across reviews."})
+            signals.append({"icon": "🤖", "title": f"{suspicious_pct}% reviews are suspicious", "detail": "AI detected coordinated patterns across reviews that appear inauthentic."})
         if uncertain_pct >= 40:
             signals.append({"icon": "❓", "title": f"{uncertain_pct}% reviews are low-signal", "detail": "A large share of reviews are too short or vague to verify."})
 

@@ -119,7 +119,8 @@ def scrape_reviews(google_maps_url: str, max_reviews: int = None) -> dict:
         "reviewsSort": "newest",
     })
 
-    all_reviews = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+    dataset_id = run["defaultDatasetId"]
+    all_reviews = list(client.dataset(dataset_id).iterate_items())
 
     # Filter to the specific place using kgmid if available
     if kgmid:
@@ -152,7 +153,7 @@ def scrape_reviews(google_maps_url: str, max_reviews: int = None) -> dict:
             "cid": first.get("cid"),
         }
 
-    return {"meta": meta, "reviews": reviews}
+    return {"meta": meta, "reviews": reviews, "apify_dataset_id": dataset_id}
 
 
 def save_results(data: dict, output_file: str = "reviews_output.json"):
