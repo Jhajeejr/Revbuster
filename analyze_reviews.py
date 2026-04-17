@@ -1,18 +1,19 @@
 """
 RevBusters – LLM Review Analysis Engine
-Uses Claude Sonnet for holistic fake review detection.
-No pre-computed stats — Sonnet performs all pattern identification itself.
+Uses Gemini Flash for holistic fake review detection.
+No pre-computed stats — Gemini performs all pattern identification itself.
 """
 
 import json
 import re
 import os
-import anthropic
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
 
 PROMPT = """You are an expert at detecting fake Google reviews for ANY local business — restaurants, salons, spas, dentists, clinics, diagnostic labs, service shops, hotels, online delivery/gifting services, retail stores, etc.
 
@@ -131,14 +132,10 @@ def analyze(reviews_data: dict) -> dict:
         f"REVIEWS JSON:\n{json.dumps(compact, ensure_ascii=False)}"
     )
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=3000,
-        messages=[{"role": "user", "content": PROMPT + "\n\n" + user_msg}],
-    )
+    model    = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
+    response = model.generate_content(PROMPT + "\n\n" + user_msg)
 
-    raw_text = response.content[0].text.strip()
+    raw_text = response.text.strip()
     # Strip markdown code fences if present
     clean = re.sub(r'```(?:json)?\s*', '', raw_text).strip()
     # Extract first JSON object found in the response
