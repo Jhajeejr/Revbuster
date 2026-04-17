@@ -132,7 +132,7 @@ def analyze(reviews_data: dict) -> dict:
         f"REVIEWS JSON:\n{json.dumps(compact, ensure_ascii=False)}"
     )
 
-    model    = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
+    model    = genai.GenerativeModel("gemini-2.5-flash-preview-05-20")
     response = model.generate_content(PROMPT + "\n\n" + user_msg)
 
     raw_text = response.text.strip()
