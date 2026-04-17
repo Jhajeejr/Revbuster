@@ -7,13 +7,13 @@ No pre-computed stats — Gemini performs all pattern identification itself.
 import json
 import re
 import os
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+_client = genai.Client(api_key=GEMINI_API_KEY)
 
 PROMPT = """You are an expert at detecting fake Google reviews for ANY local business — restaurants, salons, spas, dentists, clinics, diagnostic labs, service shops, hotels, online delivery/gifting services, retail stores, etc.
 
@@ -132,8 +132,10 @@ def analyze(reviews_data: dict) -> dict:
         f"REVIEWS JSON:\n{json.dumps(compact, ensure_ascii=False)}"
     )
 
-    model    = genai.GenerativeModel("gemini-2.5-flash-preview-05-20")
-    response = model.generate_content(PROMPT + "\n\n" + user_msg)
+    response = _client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=PROMPT + "\n\n" + user_msg,
+    )
 
     raw_text = response.text.strip()
     # Strip markdown code fences if present
