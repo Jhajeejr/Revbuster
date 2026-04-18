@@ -190,8 +190,12 @@ def analyze(reviews_data: dict) -> dict:
         trust_level = "genuine"
         trust_label = "Genuine"
 
-    # AI rating always uses the LLM's true_rating (based only on genuine reviews)
-    ai_rating = round(float(llm["true_rating"]), 1)
+    # If < 10% suspicious, trust the Google rating — AI score = Google score
+    # Otherwise use LLM's true_rating (based only on genuine reviews)
+    if fake_pct < 10:
+        ai_rating = round(float(google_rating), 1)
+    else:
+        ai_rating = round(float(llm["true_rating"]), 1)
 
     suspicious_pct = fake_pct   # rename for user-facing output
 
