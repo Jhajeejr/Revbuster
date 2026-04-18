@@ -101,14 +101,24 @@ def scrape_reviews(google_maps_url: str, max_reviews: int = None) -> dict:
     print(f"Place: {place_name} | kgmid: {kgmid}")
 
     # Choose the best URL for Apify:
-    # - If resolved to a direct place URL (/maps/place/) → use it (specific, no ambiguity)
-    # - Otherwise (share.google → google.com/search?kgmid=...) → use original short URL
-    #   so Apify can resolve it internally
+    # - /maps/place/ URL → use directly (most specific)
+    # - kgmid available → construct google.com/maps?kgmid=... (Apify accepts this)
+    # - place_name available → construct /maps/search/ URL
+    # - Last resort → use original URL (may fail for share.google format)
     final_url = resolved["resolved_url"]
-    if "/maps/place/" in final_url:
+    if "/maps/place/" in final_url or "/maps/search" in final_url:
         apify_url = final_url
+    elif kgmid:
+        from urllib.parse import quote
+        apify_url = f"https://www.google.com/maps?kgmid={quote(kgmid, safe='/')}"
+        print(f"share.google resolved via kgmid: {apify_url}")
+    elif place_name:
+        from urllib.parse import quote
+        apify_url = f"https://www.google.com/maps/search/{quote(place_name)}/"
+        print(f"share.google resolved via place name: {apify_url}")
     else:
         apify_url = google_maps_url
+        print(f"Warning: could not resolve to a valid Maps URL, using original: {apify_url}")
 
     # Single scrape — start with 200, dynamic limit applied after using reviewsCount from results
     first_pass = max_reviews or 100
