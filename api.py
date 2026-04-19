@@ -236,15 +236,27 @@ def analyze_text():
     if request.method == "OPTIONS":
         return "", 204
 
-    body        = request.get_json(silent=True) or {}
+    body         = request.get_json(silent=True) or {}
     reviews_data = body.get("reviews_data")
+    page_url     = (body.get("url") or "").strip()
 
     if not reviews_data or not reviews_data.get("reviews"):
         return jsonify({"error": "reviews_data with at least one review is required"}), 400
 
     try:
         result = analyze(reviews_data)
-        save_to_supabase(result)
+
+        # Extract place_id and normalised URL so cache lookup works next time
+        place_id = norm_url = None
+        if page_url:
+            try:
+                expanded = expand_url(page_url)
+                place_id = extract_place_id(expanded)
+                norm_url = normalize_url(expanded)
+            except Exception:
+                pass
+
+        save_to_supabase(result, place_id=place_id, place_url=norm_url)
         return jsonify(_sanitize(result))
 
     except Exception as e:
