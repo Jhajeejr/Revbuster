@@ -136,15 +136,43 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
 
-@app.route("/analyze",  methods=["OPTIONS"])
-def analyze_preflight():  return "", 204
+@app.route("/analyze",      methods=["OPTIONS"])
+def analyze_preflight():    return "", 204
 
-@app.route("/history",  methods=["OPTIONS"])
-def history_preflight():  return "", 204
+@app.route("/history",      methods=["OPTIONS"])
+def history_preflight():    return "", 204
+
+@app.route("/check-cache",  methods=["OPTIONS"])
+def check_cache_preflight(): return "", 204
 
 @app.route("/ping", methods=["GET"])
 def ping():
     return jsonify({"status": "ok"})
+
+
+@app.route("/check-cache", methods=["POST"])
+def check_cache():
+    """
+    Lightweight cache lookup — called by the extension before scraping.
+    Body: { "url": "<current Google Maps page URL>" }
+    Returns cached result if found, or { "cached": false } if not.
+    """
+    body = request.get_json(silent=True) or {}
+    url  = (body.get("url") or "").strip()
+    if not url:
+        return jsonify({"cached": False})
+    try:
+        expanded = expand_url(url)
+        place_id = extract_place_id(expanded)
+        norm_url = normalize_url(expanded)
+        cached   = lookup_cache(place_id, norm_url)
+        if cached:
+            print(f"[check-cache] Hit → {cached.get('business_name')}")
+            return jsonify(row_to_result(cached))
+        return jsonify({"cached": False})
+    except Exception as e:
+        print(f"[check-cache] Error: {e}")
+        return jsonify({"cached": False})
 
 
 @app.route("/analyze", methods=["POST"])
